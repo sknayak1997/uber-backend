@@ -1,5 +1,7 @@
 package com.uber.uberapi.models;
 
+import com.uber.uberapi.exceptions.InvalidActionOnBookingStateException;
+import com.uber.uberapi.exceptions.InvalidOTPException;
 import lombok.*;
 
 import javax.persistence.*;
@@ -13,7 +15,10 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name="booking")
+@Table(name = "booking", indexes = {
+        @Index(columnList = "passenger_id"),
+        @Index(columnList = "driver_id")
+})
 public class Booking extends Auditable {
     @ManyToOne
     private Passenger passenger;
@@ -25,7 +30,7 @@ public class Booking extends Auditable {
     private BookingType bookingType;
 
     @OneToOne
-    private Review reviewByUser;
+    private Review reviewByPassenger;
 
     @OneToOne
     private Review reviewByDriver;
@@ -37,7 +42,14 @@ public class Booking extends Auditable {
     private BookingStatus bookingStatus;
 
     @OneToMany
-    private List<ExactLocation> routes = new ArrayList<>();
+    @JoinTable(
+            name="booking_route",
+            joinColumns = @JoinColumn(name = "booking_id"),
+            inverseJoinColumns = @JoinColumn(name = "exact_location_id"),
+            indexes = {@Index(columnList = "booking_id")}
+    )
+    @OrderColumn(name = "location_index")
+    private List<ExactLocation> route = new ArrayList<>();
 
     @Temporal(value = TemporalType.TIMESTAMP)
     private Date startTime;
@@ -49,4 +61,21 @@ public class Booking extends Auditable {
     private OTP rideStartOTP;
 
     private Long totalDistanceMetres;
+
+    public void startRide(OTP otp) {
+        if(!this.bookingStatus.equals(BookingStatus.CAB_ARRIVED)) {
+            throw new InvalidActionOnBookingStateException("Cannot start the ride before reaching pick-up location");
+        }
+        if(!rideStartOTP.validateEnteredOTP(otp)) {
+            throw new InvalidOTPException();
+        }
+        this.setBookingStatus(BookingStatus.IN_RIDE);
+    }
+
+    public void endRide() {
+        if(!this.bookingStatus.equals(BookingStatus.IN_RIDE)) {
+            throw new InvalidActionOnBookingStateException("Cannot end ride before reaching destination");
+        }
+        this.setBookingStatus(BookingStatus.COMPLETED);
+    }
 }

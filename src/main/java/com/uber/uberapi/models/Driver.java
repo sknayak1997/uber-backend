@@ -1,5 +1,6 @@
 package com.uber.uberapi.models;
 
+import com.uber.uberapi.exceptions.UnapprovedDriverException;
 import lombok.*;
 
 import javax.persistence.*;
@@ -44,4 +45,11 @@ public class Driver extends Auditable{
 
     @OneToOne
     private ExactLocation lastKnownLocation;
+
+    public void setAvailable(Boolean available) {
+        if(available && !this.approvalStatus.equals(DriverApprovalStatus.APPROVED) ) {
+            throw new UnapprovedDriverException("Driver approval pending or denied "+ this.getId());
+        }
+        isAvailable = available;
+    }
 }
